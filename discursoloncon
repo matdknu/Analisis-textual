@@ -1,0 +1,140 @@
+library(readtext) # importar texto como data frame
+library(quanteda) # análisis
+library(quanteda.textplots)
+library(quanteda.textmodels)
+library(tidyverse)
+library(readxl)
+library(ggplot2)
+
+#Discurso Elisa
+
+discursoElisa <- readtext ("Discursos_Consti/*.txt",
+                           encoding = "UTF-8") 
+
+
+class(discursoElisa)
+names(discursoElisa)
+glimpse (discursoElisa)
+
+elisa_c <- corpus(discursoElisa)
+
+
+class(elisa_c)
+names(elisa_c)
+glimpse (elisa_c)
+
+
+summary(elisa_c)
+resumen <- as_tibble (summary(elisa_c))
+resumen
+
+
+meta_data <- resumen %>% 
+  separate(col = Text,
+           into = c("Año", "Presidenta", "Formato"))
+
+
+
+docvars(elisa_c, "Presidente") <- metadata$Presidente
+docvars(elisa_c, "Año")        <- metadata$Año
+docvars(elisa_c, "Formato")    <- metadata$Formato
+
+elisa_c
+
+summary(elisa_c)
+View(summary(elisa_c))
+
+resumen <- arrange(resumen,Tokens)
+dotchart(resumen$Tokens, resumen$Text)
+
+textplot_xray(
+  kwic(elisa_c, "Pueblo"),
+  kwic(elisa_c, "Chile"),
+  kwic(elisa_c, "cultu*"),
+  kwic(elisa_c, "Constitución") ,
+  kwic(elisa_c, "Nacion*"),
+  kwic(elisa_c, "Estado*"),
+  kwic(elisa_c, "Democracia")) +
+  labs(
+    title= "Conceptos pronunciados por Elisa Elisa Loncón",
+    subtitle = "Desagregados por dispersión léxica",
+    caption= "Fuente de datos: Discurso Elisa Loncón.")
+
+
+library(ggplot2)
+
+#Crear diccionario
+conceptos = dictionary(list(Geográfico = c('patagonia', "sur", "norte", "Tierra", 
+                                           "agua", 
+                                           "Wallmapu", "mar", "Patagonia", "lafken", "cordillera", "isla*"),
+                            Subyugación = c('colonial*', "autoridad", 
+                                            "atac*", "atente", "dominaci*" ),
+                            Democracia = c('constit*', "derechos", 
+                                           "legiti*", "just*", "deber*", "participa*", 
+                                           "hist*", "conven", "Estado", "transpar*", "sociedad
+                                           relac*", "represent*", "convoc*"),
+                            Minorías = c("pueblo*", "indígenas", "niñ*",
+                                         "mujer", "abuel*", 
+                                         "respeto", "plurinaci*", 
+                                         "diversidad", "sex", "regi*", "posterg*", 
+                                         "origina*", "mapuche", "intercultu", "cuidador", "cultur*")))
+
+#Análisis de sentimiento al total de textos
+#crea dtm
+elisa_dtm <- elisa_c %>% dfm(remove = c(stopwords("spanish")), 
+                             remove_punct=T, remove_numbers=T, 
+                             tolower = T) %>% dfm_trim(min_docfreq = 0)
+
+#Integrar diccionario a dtm
+elisa_final = elisa_dtm %>% dfm_lookup(conceptos) %>%
+  convert(to = "data.frame") %>% as_tibble
+elisa_final
+
+elisa_final = elisa_final %>% mutate(length=ntoken(elisa_dtm))
+
+
+#transponer resultado
+
+elisa_t <- data.frame(t(elisa_final[,2:5]))
+
+#suma de puntajes
+
+elisa_t  <- data.frame(rowSums(elisa_t))
+
+#Nombra la columna de puntajes como recuento
+names(elisa_t)[1] <- "recuento"
+
+elisa_t <- cbind("conceptos" = rownames(elisa_t), 
+                 elisa_t)
+
+#redondear
+tabla_didacticas$recuento = round(tabla_didacticas[1:4,2], digits = 2)
+
+#crea gráfico
+
+ggplot(elisa_t,
+       aes(x = conceptos,
+           y = recuento, fill = conceptos)) + 
+  geom_bar(stat = "identity") +
+  labs(title = "Elementos contenidos en el discurso",
+       subtitle = "Desagregados por elementos conceptuales",
+       caption= "Fuente de datos: Discurso Elisa Loncón publicado en www.colegiodeprofesores.cl ",
+       x = "Conceptos", y = "Frecuencia")
+
+
+y <- ggplot(elisa_t,
+            aes(x = conceptos,
+                y = recuento, fill = conceptos)) + 
+  geom_bar(stat = "identity") +
+  labs(title = " Elementos contenidos en el discurso (%)",
+       x = "Conceptos", y = "Frecuencia") +
+  geom_text(aes(label = paste0(recuento, "%")),
+            vjust = -0.5, color = "black",
+            size = 5) + ylim(0,100) + theme(plot.title = element_text(hjust = 0.5),
+                                            axis.text = element_text(size=12),
+                                            axis.title = element_text(size=14,face = "bold"),
+                                            title = element_text(size=20,face = "bold"),
+                                            legend.position = "none")
+
+
+y
